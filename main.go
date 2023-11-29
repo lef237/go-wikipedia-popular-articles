@@ -38,13 +38,13 @@ func fetchPopularArticles(lang string) (*ApiResponse, error) {
 	}
 
 	// JSONのパース
-	var apiResponse ApiResponse
-	err = json.Unmarshal(body, &apiResponse)
+	var apiResp ApiResponse
+	err = json.Unmarshal(body, &apiResp)
 	if err != nil {
 		return nil, err
 	}
 
-	return &apiResponse, nil
+	return &apiResp, nil
 }
 
 func main() {
