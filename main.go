@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,10 +18,11 @@ type ApiResponse struct {
 	} `json:"query"`
 }
 
-func fetchPopularArticles() (*ApiResponse, error) {
+func fetchPopularArticles(lang string) (*ApiResponse, error) {
 	// Wikipedia API から人気記事を取得する処理を実装
-	// 日本のWikipedia
-	url := fmt.Sprintf("https://ja.wikipedia.org/w/api.php?action=query&list=mostviewed&format=json")
+	// 引数によって日本語と英語を出し分ける
+	baseURL := "https://%s.wikipedia.org/w/api.php"
+	url := fmt.Sprintf(baseURL, lang) + "?action=query&list=mostviewed&format=json"
 
 	// HTTPリクエストの実行
 	resp, err := http.Get(url)
@@ -34,9 +36,6 @@ func fetchPopularArticles() (*ApiResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// レスポンスの表示
-	fmt.Println(string(body))
 
 	// JSONのパース
 	var apiResponse ApiResponse
@@ -52,8 +51,12 @@ func main() {
 	// 今日の日付を出力
 	fmt.Println(time.Now().Format("2006-01-02"))
 
+	// 言語のコマンドライン引数を追加
+	langFlag := flag.String("lang", "ja", "Specify the language (e.g., 'ja' for Japanese, 'en' for English)")
+	flag.Parse()
+
 	// Wikipedia API から人気記事を取得
-	articles, err := fetchPopularArticles()
+	articles, err := fetchPopularArticles(*langFlag)
 	if err != nil {
 		fmt.Println(err)
 		return

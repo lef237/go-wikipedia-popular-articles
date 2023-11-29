@@ -8,7 +8,7 @@ You can get the most popular articles on Wikipedia in Japan today.
 go run main.go
 ```
 
-When you want to get the past articles. You have to format the date as "YYYY-MM-DD".
+When you want to get the english articles, you can use the `-lang` option.
 ```
-go run main.go -date "2020-01-01"
+go run main.go -lang en
 ```
