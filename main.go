@@ -34,10 +34,22 @@ func fetchPopularArticles(lang string) (*ApiResponse, error) {
 	// レスポンスの読み込み
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading response body failed: %w", err)
 	}
 
-	// JSONのパース
+	// エラーレスポンスの解析
+	var errResp struct {
+		Error struct {
+			Code string `json:"code"`
+			Info string `json:"info"`
+		} `json:"error"`
+	}
+	json.Unmarshal(body, &errResp) // 最初にエラーレスポンスをチェック
+	if errResp.Error.Code != "" {
+		return nil, fmt.Errorf("API error: %s - %s", errResp.Error.Code, errResp.Error.Info)
+	}
+
+	// 通常のレスポンスが返ってきたとき：JSONのパース
 	var apiResp ApiResponse
 	err = json.Unmarshal(body, &apiResp)
 	if err != nil {
