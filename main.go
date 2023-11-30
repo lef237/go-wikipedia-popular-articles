@@ -66,8 +66,7 @@ func fetchPopularArticles(lang string) (*ApiResponse, error) {
 
 	// 通常のレスポンスが返ってきたとき：JSONのパース
 	var apiResp ApiResponse
-	err = json.Unmarshal(body, &apiResp)
-	if err != nil {
+	if err := json.Unmarshal(body, &apiResp); err != nil {
 		return nil, err
 	}
 
