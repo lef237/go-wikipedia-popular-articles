@@ -64,15 +64,21 @@ func printToday() {
 	fmt.Println(time.Now().Format("2006-01-02"))
 }
 
+// 言語のコマンドライン引数をパース
+func parseFlag() string {
+	langFlag := flag.String("lang", "ja", "Specify the language (e.g., 'ja' for Japanese, 'en' for English)")
+	flag.Parse()
+	return *langFlag
+}
+
 func main() {
 	printToday()
 
-	// 言語のコマンドライン引数を追加
-	langFlag := flag.String("lang", "ja", "Specify the language (e.g., 'ja' for Japanese, 'en' for English)")
-	flag.Parse()
+	// 言語の文字列を取得
+	lang := parseFlag()
 
 	// Wikipedia API から人気記事を取得
-	articles, err := fetchPopularArticles(*langFlag)
+	articles, err := fetchPopularArticles(lang)
 	if err != nil {
 		fmt.Println(err)
 		return
