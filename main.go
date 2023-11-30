@@ -25,6 +25,24 @@ func buildURL(lang string) string {
 	return fmt.Sprintf(baseURL, lang) + "?action=query&list=mostviewed&format=json"
 }
 
+func checkAPIError(body []byte) error {
+	var errResp struct {
+		Error struct {
+			Code string `json:"code"`
+			Info string `json:"info"`
+		} `json:"error"`
+	}
+	// 構造体のフィールドが見つからないこと自体はエラーではない
+	// そのため、通常のレスポンスでも問題なく処理を続ける
+	if err := json.Unmarshal(body, &errResp); err != nil {
+		return err
+	}
+	if errResp.Error.Code != "" {
+		return fmt.Errorf("API error: %s - %s", errResp.Error.Code, errResp.Error.Info)
+	}
+	return nil
+}
+
 func fetchPopularArticles(lang string) (*ApiResponse, error) {
 	url := buildURL(lang)
 
@@ -42,15 +60,8 @@ func fetchPopularArticles(lang string) (*ApiResponse, error) {
 	}
 
 	// エラーレスポンスの解析
-	var errResp struct {
-		Error struct {
-			Code string `json:"code"`
-			Info string `json:"info"`
-		} `json:"error"`
-	}
-	json.Unmarshal(body, &errResp) // 最初にエラーレスポンスをチェック
-	if errResp.Error.Code != "" {
-		return nil, fmt.Errorf("API error: %s - %s", errResp.Error.Code, errResp.Error.Info)
+	if err := checkAPIError(body); err != nil {
+		return nil, err
 	}
 
 	// 通常のレスポンスが返ってきたとき：JSONのパース
