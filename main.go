@@ -18,6 +18,18 @@ type ApiResponse struct {
 	} `json:"query"`
 }
 
+// 今日の日付を出力
+func printToday() {
+	fmt.Println(time.Now().Format("2006-01-02"))
+}
+
+// 言語のコマンドライン引数をパース
+func parseFlag() string {
+	langFlag := flag.String("lang", "ja", "Specify the language (e.g., 'ja' for Japanese, 'en' for English)")
+	flag.Parse()
+	return *langFlag
+}
+
 // 引数によって日本語と英語を出し分ける
 // Wikipedia API から人気記事を取得する処理を実装
 func buildURL(lang string) string {
@@ -71,18 +83,6 @@ func fetchPopularArticles(lang string) (*ApiResponse, error) {
 	}
 
 	return &apiResp, nil
-}
-
-// 今日の日付を出力
-func printToday() {
-	fmt.Println(time.Now().Format("2006-01-02"))
-}
-
-// 言語のコマンドライン引数をパース
-func parseFlag() string {
-	langFlag := flag.String("lang", "ja", "Specify the language (e.g., 'ja' for Japanese, 'en' for English)")
-	flag.Parse()
-	return *langFlag
 }
 
 func main() {
