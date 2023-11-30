@@ -59,9 +59,13 @@ func fetchPopularArticles(lang string) (*ApiResponse, error) {
 	return &apiResp, nil
 }
 
-func main() {
-	// 今日の日付を出力
+// 今日の日付を出力
+func printToday() {
 	fmt.Println(time.Now().Format("2006-01-02"))
+}
+
+func main() {
+	printToday()
 
 	// 言語のコマンドライン引数を追加
 	langFlag := flag.String("lang", "ja", "Specify the language (e.g., 'ja' for Japanese, 'en' for English)")
