@@ -18,11 +18,15 @@ type ApiResponse struct {
 	} `json:"query"`
 }
 
-func fetchPopularArticles(lang string) (*ApiResponse, error) {
-	// Wikipedia API から人気記事を取得する処理を実装
-	// 引数によって日本語と英語を出し分ける
+// 引数によって日本語と英語を出し分ける
+// Wikipedia API から人気記事を取得する処理を実装
+func buildURL(lang string) string {
 	baseURL := "https://%s.wikipedia.org/w/api.php"
-	url := fmt.Sprintf(baseURL, lang) + "?action=query&list=mostviewed&format=json"
+	return fmt.Sprintf(baseURL, lang) + "?action=query&list=mostviewed&format=json"
+}
+
+func fetchPopularArticles(lang string) (*ApiResponse, error) {
+	url := buildURL(lang)
 
 	// HTTPリクエストの実行
 	resp, err := http.Get(url)
