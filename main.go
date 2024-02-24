@@ -122,7 +122,8 @@ func fetchPopularArticles(lang string) (*ApiResponse, error) {
 
 func containsFullWidthDigit(input string) bool {
 	for _, r := range input {
-		if unicode.IsDigit(r) && !unicode.Is(unicode.ASCII_Hex_Digit, r) {
+		// ASCII characters fall within the range 0-127, so characters over 128 can be considered full-width characters.
+		if unicode.IsDigit(r) && r > 127 {
 			return true
 		}
 	}
