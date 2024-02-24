@@ -1,13 +1,18 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"strconv"
+	"strings"
 	"time"
+	"unicode"
 )
 
 type ApiResponse struct {
@@ -88,10 +93,31 @@ func fetchPopularArticles(lang string) (*ApiResponse, error) {
 	return &apiResp, nil
 }
 
+func containsFullWidthDigit(input string) bool {
+	for _, r := range input {
+		if unicode.IsDigit(r) && !unicode.Is(unicode.ASCII_Hex_Digit, r) {
+			return true
+		}
+	}
+	return false
+}
+
 func promptForArticleIndex(max int) (int, error) {
+	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("Enter the index of the article to view its details (0-9):")
-	var index int
-	if _, err := fmt.Scanf("%d", &index); err != nil || index < 0 || index >= max {
+
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		return -1, fmt.Errorf("failed to read input: %w", err)
+	}
+	input = strings.TrimSpace(input)
+
+	if containsFullWidthDigit(input) {
+		return -1, fmt.Errorf("全角数字が含まれています。半角数字で入力してください")
+	}
+
+	index, err := strconv.Atoi(input)
+	if err != nil || index < 0 || index >= max {
 		return -1, fmt.Errorf("invalid input")
 	}
 	return index, nil
