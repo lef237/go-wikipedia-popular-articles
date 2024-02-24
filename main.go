@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -18,20 +19,16 @@ type ApiResponse struct {
 	} `json:"query"`
 }
 
-// 今日の日付を出力
 func printToday() {
 	fmt.Println(time.Now().Format("2006-01-02"))
 }
 
-// 言語のコマンドライン引数をパース
 func parseFlag() string {
 	langFlag := flag.String("lang", "ja", "Specify the language (e.g., 'ja' for Japanese, 'en' for English)")
 	flag.Parse()
 	return *langFlag
 }
 
-// 引数によって日本語と英語を出し分ける
-// Wikipedia API から人気記事を取得する処理を実装
 func buildURL(lang string) string {
 	baseURL := "https://%s.wikipedia.org/w/api.php"
 	return fmt.Sprintf(baseURL, lang) + "?action=query&list=mostviewed&format=json"
@@ -44,8 +41,6 @@ func checkAPIError(body []byte) error {
 			Info string `json:"info"`
 		} `json:"error"`
 	}
-	// 構造体のフィールドが見つからないこと自体はエラーではない
-	// そのため、通常のレスポンスでも問題なく処理を続ける
 	if err := json.Unmarshal(body, &errResp); err != nil {
 		return err
 	}
@@ -58,25 +53,21 @@ func checkAPIError(body []byte) error {
 func fetchPopularArticles(lang string) (*ApiResponse, error) {
 	url := buildURL(lang)
 
-	// HTTPリクエストの実行
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	// レスポンスの読み込み
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("reading response body failed: %w", err)
 	}
 
-	// エラーレスポンスの解析
 	if err := checkAPIError(body); err != nil {
 		return nil, err
 	}
 
-	// 通常のレスポンスが返ってきたとき：JSONのパース
 	var apiResp ApiResponse
 	if err := json.Unmarshal(body, &apiResp); err != nil {
 		return nil, err
@@ -85,21 +76,69 @@ func fetchPopularArticles(lang string) (*ApiResponse, error) {
 	return &apiResp, nil
 }
 
+func fetchArticleDetailURL(lang string, title string) (string, error) {
+	baseURL := fmt.Sprintf("https://%s.wikipedia.org/w/api.php", lang)
+	query := fmt.Sprintf("%s?action=query&format=json&titles=%s&prop=info&inprop=url", baseURL, url.QueryEscape(title))
+
+	resp, err := http.Get(query)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("reading response body failed: %w", err)
+	}
+
+	var result struct {
+		Query struct {
+			Pages map[string]struct {
+				FullURL string `json:"fullurl"`
+			} `json:"pages"`
+		} `json:"query"`
+	}
+
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", err
+	}
+
+	for _, page := range result.Query.Pages {
+		return page.FullURL, nil
+	}
+
+	return "", fmt.Errorf("article URL not found")
+}
+
 func main() {
 	printToday()
 
-	// 言語の文字列を取得
 	lang := parseFlag()
 
-	// Wikipedia API から人気記事を取得
 	articles, err := fetchPopularArticles(lang)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
-	// 記事の表示
-	for _, page := range articles.Query.MostViewed {
-		fmt.Printf("Title: %s\nView Count: %d\n\n", page.Title, page.Count)
+	for i, page := range articles.Query.MostViewed {
+		fmt.Printf("%d: Title: %s, View Count: %d\n", i, page.Title, page.Count)
 	}
+
+	var index int
+	fmt.Println("Enter the index of the article to view its details (0-9):")
+	_, err = fmt.Scanf("%d", &index)
+	if err != nil || index < 0 || index >= len(articles.Query.MostViewed) {
+		fmt.Println("Invalid input. Exiting.")
+		return
+	}
+
+	title := articles.Query.MostViewed[index].Title
+	url, err := fetchArticleDetailURL(lang, title)
+	if err != nil {
+		fmt.Println("Failed to fetch article details:", err)
+		return
+	}
+
+	fmt.Printf("Details for \"%s\": %s\n", title, url)
 }
