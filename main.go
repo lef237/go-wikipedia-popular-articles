@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 )
 
 type ApiResponse struct {
@@ -120,16 +119,6 @@ func fetchPopularArticles(lang string) (*ApiResponse, error) {
 	return &apiResp, nil
 }
 
-func containsFullWidthDigit(input string) bool {
-	for _, r := range input {
-		// ASCII characters fall within the range 0-127, so characters over 128 can be considered full-width characters.
-		if unicode.IsDigit(r) && r > 127 {
-			return true
-		}
-	}
-	return false
-}
-
 func promptForArticleIndex(max int) (int, error) {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("Enter the index of the article to view its details (0-9):")
@@ -140,15 +129,26 @@ func promptForArticleIndex(max int) (int, error) {
 	}
 	input = strings.TrimSpace(input)
 
-	if containsFullWidthDigit(input) {
-		return -1, fmt.Errorf("全角数字が含まれています。半角数字で入力してください")
-	}
+	convertedInput := convertFullWidthDigitsToHalfWidth(input)
 
-	index, err := strconv.Atoi(input)
+	index, err := strconv.Atoi(convertedInput)
 	if err != nil || index < 0 || index >= max {
 		return -1, fmt.Errorf("invalid input")
 	}
 	return index, nil
+}
+
+func convertFullWidthDigitsToHalfWidth(input string) string {
+	var builder strings.Builder
+	for _, r := range input {
+		if r >= '０' && r <= '９' {
+			// Convert full-width numbers to half-width numbers
+			builder.WriteRune(r - '０' + '0')
+		} else {
+			builder.WriteRune(r)
+		}
+	}
+	return builder.String()
 }
 
 func main() {
