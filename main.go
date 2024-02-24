@@ -24,6 +24,13 @@ type ApiResponse struct {
 	} `json:"query"`
 }
 
+type APIError struct {
+	Error struct {
+		Code string `json:"code"`
+		Info string `json:"info"`
+	} `json:"error"`
+}
+
 func printToday() {
 	fmt.Println(time.Now().Format("2006-01-02"))
 }
@@ -41,7 +48,27 @@ func fetchAPI(url string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	return io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body failed: %w", err)
+	}
+
+	if err := checkAPIError(body); err != nil {
+		return nil, err
+	}
+
+	return body, nil
+}
+
+func checkAPIError(body []byte) error {
+	var errResp APIError
+	if err := json.Unmarshal(body, &errResp); err != nil {
+		return fmt.Errorf("failed to parse API response: %w", err)
+	}
+	if errResp.Error.Code != "" {
+		return fmt.Errorf("API error: %s - %s", errResp.Error.Code, errResp.Error.Info)
+	}
+	return nil
 }
 
 func buildMostViewedURL(lang string) string {
