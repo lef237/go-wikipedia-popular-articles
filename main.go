@@ -23,72 +23,35 @@ func printToday() {
 	fmt.Println(time.Now().Format("2006-01-02"))
 }
 
-func parseFlag() string {
+func parseLangFlag() string {
 	langFlag := flag.String("lang", "ja", "Specify the language (e.g., 'ja' for Japanese, 'en' for English)")
 	flag.Parse()
 	return *langFlag
 }
 
-func buildURL(lang string) string {
-	baseURL := "https://%s.wikipedia.org/w/api.php"
-	return fmt.Sprintf(baseURL, lang) + "?action=query&list=mostviewed&format=json"
-}
-
-func checkAPIError(body []byte) error {
-	var errResp struct {
-		Error struct {
-			Code string `json:"code"`
-			Info string `json:"info"`
-		} `json:"error"`
-	}
-	if err := json.Unmarshal(body, &errResp); err != nil {
-		return err
-	}
-	if errResp.Error.Code != "" {
-		return fmt.Errorf("API error: %s - %s", errResp.Error.Code, errResp.Error.Info)
-	}
-	return nil
-}
-
-func fetchPopularArticles(lang string) (*ApiResponse, error) {
-	url := buildURL(lang)
-
+func fetchAPI(url string) ([]byte, error) {
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading response body failed: %w", err)
-	}
-
-	if err := checkAPIError(body); err != nil {
-		return nil, err
-	}
-
-	var apiResp ApiResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return nil, err
-	}
-
-	return &apiResp, nil
+	return io.ReadAll(resp.Body)
 }
 
-func fetchArticleDetailURL(lang string, title string) (string, error) {
-	baseURL := fmt.Sprintf("https://%s.wikipedia.org/w/api.php", lang)
-	query := fmt.Sprintf("%s?action=query&format=json&titles=%s&prop=info&inprop=url", baseURL, url.QueryEscape(title))
+func buildMostViewedURL(lang string) string {
+	return fmt.Sprintf("https://%s.wikipedia.org/w/api.php?action=query&list=mostviewed&format=json", lang)
+}
 
-	resp, err := http.Get(query)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
+func buildArticleDetailURL(lang, title string) string {
+	return fmt.Sprintf("https://%s.wikipedia.org/w/api.php?action=query&format=json&titles=%s&prop=info&inprop=url", lang, url.QueryEscape(title))
+}
 
-	body, err := io.ReadAll(resp.Body)
+func getArticleDetails(lang, title string) (string, error) {
+	url := buildArticleDetailURL(lang, title)
+	body, err := fetchAPI(url)
 	if err != nil {
-		return "", fmt.Errorf("reading response body failed: %w", err)
+		return "", fmt.Errorf("fetching article details failed: %w", err)
 	}
 
 	var result struct {
@@ -110,14 +73,37 @@ func fetchArticleDetailURL(lang string, title string) (string, error) {
 	return "", fmt.Errorf("article URL not found")
 }
 
+func fetchPopularArticles(lang string) (*ApiResponse, error) {
+	url := buildMostViewedURL(lang)
+	body, err := fetchAPI(url)
+	if err != nil {
+		return nil, fmt.Errorf("fetching popular articles failed: %w", err)
+	}
+
+	var apiResp ApiResponse
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		return nil, err
+	}
+
+	return &apiResp, nil
+}
+
+func promptForArticleIndex(max int) (int, error) {
+	fmt.Println("Enter the index of the article to view its details (0-9):")
+	var index int
+	if _, err := fmt.Scanf("%d", &index); err != nil || index < 0 || index >= max {
+		return -1, fmt.Errorf("invalid input")
+	}
+	return index, nil
+}
+
 func main() {
 	printToday()
-
-	lang := parseFlag()
+	lang := parseLangFlag()
 
 	articles, err := fetchPopularArticles(lang)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("Error: %s\n", err)
 		return
 	}
 
@@ -125,18 +111,16 @@ func main() {
 		fmt.Printf("%d: Title: %s, View Count: %d\n", i, page.Title, page.Count)
 	}
 
-	var index int
-	fmt.Println("Enter the index of the article to view its details (0-9):")
-	_, err = fmt.Scanf("%d", &index)
-	if err != nil || index < 0 || index >= len(articles.Query.MostViewed) {
-		fmt.Println("Invalid input. Exiting.")
+	index, err := promptForArticleIndex(len(articles.Query.MostViewed))
+	if err != nil {
+		fmt.Println("Exiting due to:", err)
 		return
 	}
 
 	title := articles.Query.MostViewed[index].Title
-	url, err := fetchArticleDetailURL(lang, title)
+	url, err := getArticleDetails(lang, title)
 	if err != nil {
-		fmt.Println("Failed to fetch article details:", err)
+		fmt.Printf("Failed to fetch article details: %s\n", err)
 		return
 	}
 
