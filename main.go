@@ -84,6 +84,10 @@ func buildArticleDetailURL(lang, title string) string {
 	return fmt.Sprintf("https://%s.wikipedia.org/w/api.php?action=query&format=json&titles=%s&prop=info&inprop=url", lang, url.QueryEscape(title))
 }
 
+func buildArticleSummaryURL(lang, title string) string {
+	return fmt.Sprintf("https://%s.wikipedia.org/w/api.php?action=query&format=json&titles=%s&prop=extracts&exintro=true&explaintext=true", lang, url.QueryEscape(title))
+}
+
 func getArticleDetails(client APIClient, lang, title string) (string, error) {
 	url := buildArticleDetailURL(lang, title)
 	body, err := client.Fetch(url)
@@ -108,6 +112,32 @@ func getArticleDetails(client APIClient, lang, title string) (string, error) {
 	}
 
 	return "", fmt.Errorf("article URL not found")
+}
+
+func getArticleSummary(client APIClient, lang, title string) (string, error) {
+	url := buildArticleSummaryURL(lang, title)
+	body, err := client.Fetch(url)
+	if err != nil {
+		return "", fmt.Errorf("fetching article summary failed: %w", err)
+	}
+
+	var result struct {
+		Query struct {
+			Pages map[string]struct {
+				Extract string `json:"extract"`
+			} `json:"pages"`
+		} `json:"query"`
+	}
+
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "", err
+	}
+
+	for _, page := range result.Query.Pages {
+		return page.Extract, nil
+	}
+
+	return "", fmt.Errorf("article summary not found")
 }
 
 func fetchPopularArticles(client APIClient, lang string) (ApiResponse, error) {
@@ -185,5 +215,12 @@ func main() {
 		return
 	}
 
-	fmt.Printf("Details for \"%s\": %s\n", title, url)
+	summary, err := getArticleSummary(client, lang, title)
+	if err != nil {
+		fmt.Printf("Failed to fetch article summary: %s\n", err)
+		return
+	}
+
+	fmt.Printf("Details for \"%s\": %s\n\n", title, url)
+	fmt.Println("Article Summary:", summary)
 }
