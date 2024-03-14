@@ -40,7 +40,13 @@ func parseLangFlag() string {
 	return *langFlag
 }
 
-func fetchAPI(url string) ([]byte, error) {
+type APIClient interface {
+	Fetch(url string) ([]byte, error)
+}
+
+type WikipediaAPIClient struct{}
+
+func (client WikipediaAPIClient) Fetch(url string) ([]byte, error) {
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
@@ -78,9 +84,9 @@ func buildArticleDetailURL(lang, title string) string {
 	return fmt.Sprintf("https://%s.wikipedia.org/w/api.php?action=query&format=json&titles=%s&prop=info&inprop=url", lang, url.QueryEscape(title))
 }
 
-func getArticleDetails(lang, title string) (string, error) {
+func getArticleDetails(client APIClient, lang, title string) (string, error) {
 	url := buildArticleDetailURL(lang, title)
-	body, err := fetchAPI(url)
+	body, err := client.Fetch(url)
 	if err != nil {
 		return "", fmt.Errorf("fetching article details failed: %w", err)
 	}
@@ -104,9 +110,9 @@ func getArticleDetails(lang, title string) (string, error) {
 	return "", fmt.Errorf("article URL not found")
 }
 
-func fetchPopularArticles(lang string) (ApiResponse, error) {
+func fetchPopularArticles(client APIClient, lang string) (ApiResponse, error) {
 	url := buildMostViewedURL(lang)
-	body, err := fetchAPI(url)
+	body, err := client.Fetch(url)
 	if err != nil {
 		return ApiResponse{}, fmt.Errorf("fetching popular articles failed: %w", err)
 	}
@@ -155,7 +161,8 @@ func main() {
 	printToday()
 	lang := parseLangFlag()
 
-	articles, err := fetchPopularArticles(lang)
+	client := WikipediaAPIClient{}
+	articles, err := fetchPopularArticles(client, lang)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
 		return
@@ -172,7 +179,7 @@ func main() {
 	}
 
 	title := articles.Query.MostViewed[index].Title
-	url, err := getArticleDetails(lang, title)
+	url, err := getArticleDetails(client, lang, title)
 	if err != nil {
 		fmt.Printf("Failed to fetch article details: %s\n", err)
 		return
