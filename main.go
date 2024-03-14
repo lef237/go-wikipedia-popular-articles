@@ -104,19 +104,19 @@ func getArticleDetails(lang, title string) (string, error) {
 	return "", fmt.Errorf("article URL not found")
 }
 
-func fetchPopularArticles(lang string) (*ApiResponse, error) {
+func fetchPopularArticles(lang string) (ApiResponse, error) {
 	url := buildMostViewedURL(lang)
 	body, err := fetchAPI(url)
 	if err != nil {
-		return nil, fmt.Errorf("fetching popular articles failed: %w", err)
+		return ApiResponse{}, fmt.Errorf("fetching popular articles failed: %w", err)
 	}
 
 	var apiResp ApiResponse
 	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return nil, err
+		return ApiResponse{}, err
 	}
 
-	return &apiResp, nil
+	return apiResp, nil
 }
 
 func promptForArticleIndex(max int) (int, error) {
