@@ -37,8 +37,16 @@ type APIClient interface {
 
 type WikipediaAPIClient struct{}
 
+const userAgent = "WikipediaPopularArticles/1.0"
+
 func (WikipediaAPIClient) Fetch(apiURL string) ([]byte, error) {
-	resp, err := http.Get(apiURL)
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
