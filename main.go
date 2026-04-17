@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -30,24 +31,14 @@ type APIError struct {
 	} `json:"error"`
 }
 
-func printToday() {
-	fmt.Println(time.Now().Format("2006-01-02"))
-}
-
-func parseLangFlag() string {
-	langFlag := flag.String("lang", "ja", "Specify the language (e.g., 'ja' for Japanese, 'en' for English)")
-	flag.Parse()
-	return *langFlag
-}
-
 type APIClient interface {
 	Fetch(url string) ([]byte, error)
 }
 
 type WikipediaAPIClient struct{}
 
-func (client WikipediaAPIClient) Fetch(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+func (WikipediaAPIClient) Fetch(apiURL string) ([]byte, error) {
+	resp, err := http.Get(apiURL)
 	if err != nil {
 		return nil, err
 	}
@@ -76,25 +67,58 @@ func checkAPIError(body []byte) error {
 	return nil
 }
 
+func printToday() {
+	fmt.Println(time.Now().Format("2006-01-02"))
+}
+
+func parseLangFlag() string {
+	langFlag := flag.String("lang", "ja", "Specify the language (e.g., 'ja' for Japanese, 'en' for English)")
+	flag.Parse()
+	return *langFlag
+}
+
+func buildAPIURL(lang string, params url.Values) string {
+	return fmt.Sprintf("https://%s.wikipedia.org/w/api.php?%s", lang, params.Encode())
+}
+
 func buildMostViewedURL(lang string) string {
-	return fmt.Sprintf("https://%s.wikipedia.org/w/api.php?action=query&list=mostviewed&format=json", lang)
+	return buildAPIURL(lang, url.Values{
+		"action": {"query"},
+		"list":   {"mostviewed"},
+		"format": {"json"},
+	})
 }
 
 func buildArticleDetailURL(lang, title string) string {
-	return fmt.Sprintf("https://%s.wikipedia.org/w/api.php?action=query&format=json&titles=%s&prop=info&inprop=url", lang, url.QueryEscape(title))
+	return buildAPIURL(lang, url.Values{
+		"action": {"query"},
+		"format": {"json"},
+		"titles": {title},
+		"prop":   {"info"},
+		"inprop": {"url"},
+	})
 }
 
 func buildArticleSummaryURL(lang, title string) string {
-	return fmt.Sprintf("https://%s.wikipedia.org/w/api.php?action=query&format=json&titles=%s&prop=extracts&exintro=true&explaintext=true", lang, url.QueryEscape(title))
+	return buildAPIURL(lang, url.Values{
+		"action":      {"query"},
+		"format":      {"json"},
+		"titles":      {title},
+		"prop":        {"extracts"},
+		"exintro":     {"true"},
+		"explaintext": {"true"},
+	})
+}
+
+func fetchJSON(client APIClient, apiURL, operation string, v any) error {
+	body, err := client.Fetch(apiURL)
+	if err != nil {
+		return fmt.Errorf("%s failed: %w", operation, err)
+	}
+	return json.Unmarshal(body, v)
 }
 
 func getArticleDetails(client APIClient, lang, title string) (string, error) {
-	url := buildArticleDetailURL(lang, title)
-	body, err := client.Fetch(url)
-	if err != nil {
-		return "", fmt.Errorf("fetching article details failed: %w", err)
-	}
-
 	var result struct {
 		Query struct {
 			Pages map[string]struct {
@@ -102,25 +126,17 @@ func getArticleDetails(client APIClient, lang, title string) (string, error) {
 			} `json:"pages"`
 		} `json:"query"`
 	}
-
-	if err := json.Unmarshal(body, &result); err != nil {
+	if err := fetchJSON(client, buildArticleDetailURL(lang, title), "fetching article details", &result); err != nil {
 		return "", err
 	}
 
 	for _, page := range result.Query.Pages {
 		return page.FullURL, nil
 	}
-
-	return "", fmt.Errorf("article URL not found")
+	return "", errors.New("article URL not found")
 }
 
 func getArticleSummary(client APIClient, lang, title string) (string, error) {
-	url := buildArticleSummaryURL(lang, title)
-	body, err := client.Fetch(url)
-	if err != nil {
-		return "", fmt.Errorf("fetching article summary failed: %w", err)
-	}
-
 	var result struct {
 		Query struct {
 			Pages map[string]struct {
@@ -128,30 +144,21 @@ func getArticleSummary(client APIClient, lang, title string) (string, error) {
 			} `json:"pages"`
 		} `json:"query"`
 	}
-
-	if err := json.Unmarshal(body, &result); err != nil {
+	if err := fetchJSON(client, buildArticleSummaryURL(lang, title), "fetching article summary", &result); err != nil {
 		return "", err
 	}
 
 	for _, page := range result.Query.Pages {
 		return page.Extract, nil
 	}
-
-	return "", fmt.Errorf("article summary not found")
+	return "", errors.New("article summary not found")
 }
 
 func fetchPopularArticles(client APIClient, lang string) (ApiResponse, error) {
-	url := buildMostViewedURL(lang)
-	body, err := client.Fetch(url)
-	if err != nil {
-		return ApiResponse{}, fmt.Errorf("fetching popular articles failed: %w", err)
-	}
-
 	var apiResp ApiResponse
-	if err := json.Unmarshal(body, &apiResp); err != nil {
+	if err := fetchJSON(client, buildMostViewedURL(lang), "fetching popular articles", &apiResp); err != nil {
 		return ApiResponse{}, err
 	}
-
 	return apiResp, nil
 }
 
@@ -163,13 +170,11 @@ func promptForArticleIndex(max int) (int, error) {
 	if err != nil {
 		return -1, fmt.Errorf("failed to read input: %w", err)
 	}
-	input = strings.TrimSpace(input)
+	input = convertFullWidthDigitsToHalfWidth(strings.TrimSpace(input))
 
-	convertedInput := convertFullWidthDigitsToHalfWidth(input)
-
-	index, err := strconv.Atoi(convertedInput)
+	index, err := strconv.Atoi(input)
 	if err != nil || index < 0 || index >= max {
-		return -1, fmt.Errorf("invalid input")
+		return -1, errors.New("invalid input")
 	}
 	return index, nil
 }
@@ -178,7 +183,6 @@ func convertFullWidthDigitsToHalfWidth(input string) string {
 	var builder strings.Builder
 	for _, r := range input {
 		if r >= '０' && r <= '９' {
-			// Convert full-width numbers to half-width numbers
 			builder.WriteRune(r - '０' + '0')
 		} else {
 			builder.WriteRune(r)
@@ -209,7 +213,7 @@ func main() {
 	}
 
 	title := articles.Query.MostViewed[index].Title
-	url, err := getArticleDetails(client, lang, title)
+	articleURL, err := getArticleDetails(client, lang, title)
 	if err != nil {
 		fmt.Printf("Failed to fetch article details: %s\n", err)
 		return
@@ -221,6 +225,6 @@ func main() {
 		return
 	}
 
-	fmt.Printf("Details for \"%s\": %s\n\n", title, url)
+	fmt.Printf("Details for \"%s\": %s\n\n", title, articleURL)
 	fmt.Println("Article Summary:", summary)
 }
