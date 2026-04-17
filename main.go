@@ -35,18 +35,26 @@ type APIClient interface {
 	Fetch(url string) ([]byte, error)
 }
 
-type WikipediaAPIClient struct{}
+type WikipediaAPIClient struct {
+	httpClient *http.Client
+	userAgent  string
+}
 
-const userAgent = "WikipediaPopularArticles/1.0"
+func NewWikipediaAPIClient() *WikipediaAPIClient {
+	return &WikipediaAPIClient{
+		httpClient: &http.Client{Timeout: 10 * time.Second},
+		userAgent:  "WikipediaPopularArticles/1.0",
+	}
+}
 
-func (WikipediaAPIClient) Fetch(apiURL string) ([]byte, error) {
+func (c *WikipediaAPIClient) Fetch(apiURL string) ([]byte, error) {
 	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("User-Agent", c.userAgent)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +211,7 @@ func main() {
 	printToday()
 	lang := parseLangFlag()
 
-	client := WikipediaAPIClient{}
+	client := NewWikipediaAPIClient()
 	articles, err := fetchPopularArticles(client, lang)
 	if err != nil {
 		fmt.Printf("Error: %s\n", err)
